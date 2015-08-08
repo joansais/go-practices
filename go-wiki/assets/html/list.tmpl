@@ -1,0 +1,15 @@
+{{define "list"}}
+	<html>
+		{{template "header"}}
+		<body>
+			<h1>Pages</h1>
+			<div>
+				<ul>
+				{{range .}}
+					<li><a href="/view/{{.}}">{{.}}</a>
+				{{end}}
+				</ul>
+			</div>
+		</body>
+	</html>
+{{end}}

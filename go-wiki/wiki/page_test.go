@@ -1,17 +1,38 @@
 package wiki
 
 import (
-	"sort"
 	"testing"
+	"sort"
+	"io/ioutil"
+	"os"
 )
 
 var (
 	samplePage = Page{Title: "TmpTestPage", Body: "This is a sample page for testing purposes."}
 )
 
-func TestLoadSave(t *testing.T) {
+func setupPageStore() *diskStore {
+	storePath, err := ioutil.TempDir("", "wikitest")
+	if err != nil {
+		panic(err)
+	}
+	store := &diskStore{path: storePath}
+	SetPageStore(store)
+	return store
+}
+
+func cleanPageStore(store *diskStore) {
+	titles, _ := store.List()
+	for _, title := range titles {
+		store.Remove(title)
+	}
+	os.Remove(store.path)
+}
+
+func TestSaveAndLoad(t *testing.T) {
+	defer cleanPageStore(setupPageStore())
+	
 	samplePage.save()
-	defer samplePage.remove()
 
 	pageLoaded, err := loadPage(samplePage.Title)
 	if err != nil {
@@ -29,8 +50,9 @@ func TestLoadSave(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
+	defer cleanPageStore(setupPageStore())
+
 	samplePage.save()
-	defer samplePage.remove()
 
 	_, err := loadPage(samplePage.Title)
 	if err != nil {
@@ -52,23 +74,16 @@ func TestRemove(t *testing.T) {
 }
 
 func TestListPages(t *testing.T) {
+	defer cleanPageStore(setupPageStore())
+
 	pages := []Page{
 		Page{Title: "TmpTestPage1", Body: "This is a sample page for testing purposes."},
 		Page{Title: "TmpTestPage3", Body: "This is a sample page for testing purposes."},
 		Page{Title: "TmpTestPage2", Body: "This is a sample page for testing purposes."}}
 
-	for _, page := range pages {
-		page.save()
-	}
-
-	defer func() {
-		for _, page := range pages {
-			page.remove()
-		}
-	}()
-
 	expected := []string{}
 	for _, page := range pages {
+		page.save()
 		expected = append(expected, page.Title)
 	}
 	sort.Strings(expected)

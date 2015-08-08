@@ -13,13 +13,17 @@ const (
 	EDIT_ENTRYPOINT_PATH = "/edit/"
 	SAVE_ENTRYPOINT_PATH = "/save/"
 	REMOVE_ENTRYPOINT_PATH = "/remove/"
-	HTML_TEMPLATE_FILES  = "assets/html/*.tmpl"
+	HTML_TEMPLATE_FILES  = "/html/*.tmpl"
 )
 
 var (
 	actionPattern = regexp.MustCompile(`^/(view|edit|save|delete)/([a-zA-Z0-9]+)$`)
-	htmlTemplates = template.Must(template.ParseGlob(HTML_TEMPLATE_FILES))
+	htmlTemplates *template.Template
 )
+
+func SetAssetsDir(path string) {
+	htmlTemplates = template.Must(template.ParseGlob(path + HTML_TEMPLATE_FILES))
+}
 
 func handleList(res http.ResponseWriter, req *http.Request) {
 	titles, err := listPages()
