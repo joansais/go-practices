@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"regexp"
 	"html/template"
-	"github.com/microcosm-cc/bluemonday"
 	"github.com/russross/blackfriday"
+	"github.com/microcosm-cc/bluemonday"
 	"strings"
 )
 
 var (
-	pageLinkPattern = regexp.MustCompile(`{.+}`)
+	// FIXME: this regexp matches "[x] etc [y][z]", it should not!
+	pageLinkPattern = regexp.MustCompile(`\[(.+)\]\[(.*)\]`)
 )
 
 type SyntaxHandler interface {
@@ -31,8 +32,8 @@ func (syntax *markdownSyntax) BodyToEdit(body string) string {
 	return pageLinkPattern.ReplaceAllStringFunc(body, syntax.pageIdToTitle)
 }
 
-func (syntax *markdownSyntax) pageIdToTitle(str string) string {
-	link := parseLink(str)
+func (syntax *markdownSyntax) pageIdToTitle(linkStr string) string {
+	link := parseLink(linkStr)
 
 	page, err := syntax.pageStore.Read(PageId(link.ref))
 	if err == nil {   // link references an existent page
@@ -46,11 +47,11 @@ func (syntax *markdownSyntax) EditToBody(edit string) string {
 	return pageLinkPattern.ReplaceAllStringFunc(edit, syntax.titleToPageId)
 }
 
-func (syntax *markdownSyntax) titleToPageId(str string) string {
-	link := parseLink(str)
+func (syntax *markdownSyntax) titleToPageId(linkStr string) string {
+	link := parseLink(linkStr)
 
 	pageId, err := syntax.pageStore.FindByTitle(link.ref)
-	if err == nil {  // link references an existent page
+	if err == nil && pageId != "" {  // link references an existent page
 		link.ref = string(pageId)
 	}
 	
@@ -58,35 +59,47 @@ func (syntax *markdownSyntax) titleToPageId(str string) string {
 }
 
 func (syntax *markdownSyntax) BodyToHtml(body string) template.HTML {
-	unsafeHtml := string(blackfriday.MarkdownCommon([]byte(body)))
-	unsafeHtml = pageLinkPattern.ReplaceAllStringFunc(unsafeHtml, syntax.pageIdToLink)
-	return template.HTML(bluemonday.UGCPolicy().Sanitize(unsafeHtml))
+	renderer, options := syntax.markdownParams()
+	unsafeHtml := string(blackfriday.MarkdownOptions([]byte(body), renderer, options))
+	return template.HTML(sanitizePolicy().Sanitize(unsafeHtml))
 }
 
-func (syntax *markdownSyntax) pageIdToLink(str string) string {
-	link := parseLink(str)
-
-	var url, txt, tit string
-	page, err := syntax.pageStore.Read(PageId(link.ref))
-	if err == nil {   // link references an existent page
-		url = "/view/" + link.ref
-		if link.txt != "" {
-			txt = link.txt
-		} else {
-			txt = page.Title
-		}
-		tit = "Go to page: " + page.Title
-	} else {   // allow creating a page with that title
-		url = "/create/?title=" + link.ref
-		if link.txt != "" {
-			txt = link.txt
-		} else {
-			txt = link.ref
-		}
-		tit = "Add page: " + link.ref
-	}
+// FIXME: commonHtmlFlags and commonExtensions should be exported by blackfriday
+func (syntax *markdownSyntax) markdownParams() (blackfriday.Renderer, blackfriday.Options) {
+	renderer := blackfriday.HtmlRenderer(blackfriday.HTML_USE_XHTML |
+		blackfriday.HTML_USE_SMARTYPANTS |
+		blackfriday.HTML_SMARTYPANTS_FRACTIONS |
+		blackfriday.HTML_SMARTYPANTS_LATEX_DASHES, "", "")
 	
-	return fmt.Sprintf("<a href=%q title=%q>%s</a>", url, tit, txt)
+	options := blackfriday.Options{Extensions: blackfriday.EXTENSION_NO_INTRA_EMPHASIS |
+		blackfriday.EXTENSION_TABLES |
+		blackfriday.EXTENSION_FENCED_CODE |
+		blackfriday.EXTENSION_AUTOLINK |
+		blackfriday.EXTENSION_STRIKETHROUGH |
+		blackfriday.EXTENSION_SPACE_HEADERS |
+		blackfriday.EXTENSION_HEADER_IDS |
+		blackfriday.EXTENSION_BACKSLASH_LINE_BREAK |
+		blackfriday.EXTENSION_DEFINITION_LISTS,
+		ReferenceOverride: syntax.pageIdToLink }
+	
+	return renderer, options
+}
+
+func sanitizePolicy() *bluemonday.Policy {
+	return bluemonday.UGCPolicy().AllowAttrs("title").OnElements("a");
+}
+
+func (syntax *markdownSyntax) pageIdToLink(reference string) (ref *blackfriday.Reference, overridden bool) {
+	page, err := syntax.pageStore.Read(PageId(reference))
+	if err == nil {  // reference to an existing page
+		link := fmt.Sprintf("/view/%s", page.Id)
+		ref = &blackfriday.Reference{Link: link, Title: page.Title, Text: page.Title}
+		overridden = true
+	} else {  // not referencing a page, or I/O error occurred
+		ref = nil
+		overridden = false
+	}
+	return
 }
 
 type pageLink struct {
@@ -94,17 +107,21 @@ type pageLink struct {
 	ref string
 }
 
-func parseLink(str string) *pageLink {
-	inner := str[1 : len(str)-1] // remove {...} brackets
-	items := strings.SplitN(inner, "|", 2)
-
+func parseLink(linkStr string) *pageLink {
+	submatches := pageLinkPattern.FindStringSubmatch(linkStr)
+/*
+fmt.Printf("linkStr: %s\n", linkStr)
+for k, submatch := range submatches {
+	fmt.Printf("submatches[%d]: %s\n", k, submatch)
+}
+*/
 	var txt, ref string
-	if len(items) == 2 {
-		txt = items[0]
-		ref = items[1]
+	if submatches[2] != "" {
+		txt = submatches[1]
+		ref = submatches[2]
 	} else {
 		txt = ""
-		ref = items[0]
+		ref = submatches[1]
 	}
 
 	return &pageLink{txt: strings.TrimSpace(txt), ref: strings.TrimSpace(ref)}
@@ -112,8 +129,8 @@ func parseLink(str string) *pageLink {
 
 func (link pageLink) String() string {
 	if link.txt != "" {
-		return fmt.Sprintf("{%s|%s}", link.txt, link.ref)
+		return fmt.Sprintf("[%s][%s]", link.txt, link.ref)
 	} else {
-		return fmt.Sprintf("{%s}", link.ref)
+		return fmt.Sprintf("[%s][]", link.ref)
 	}
 }

@@ -162,6 +162,46 @@ func TestStoreListAll(t *testing.T) {
 	}
 }
 
+func TestStoreFindByTitle(t *testing.T) {
+	store := setupPageStore()
+	defer cleanPageStore(store)
+
+	pages := []*Page{
+		&Page{Title: "Sample Page 1", Body: "This is a sample page for testing purposes."},
+		&Page{Title: "Sample Page 2", Body: "This is a sample page for testing purposes."},
+		&Page{Title: "Sample Page 3", Body: "This is a sample page for testing purposes."}}
+
+	for _, page := range pages {
+		_, err := store.Create(page)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+	}
+
+	for _, page := range pages {
+		pageId, err := store.FindByTitle(page.Title)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if pageId != page.Id {
+			t.Errorf("diskStore.FindByTitle: expected %q, found %q", page.Id, pageId)
+			return
+		}
+	}
+
+	pageId, err := store.FindByTitle("unexistent page")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if pageId != "" {
+		t.Errorf("diskStore.FindByTitle: expected nil, found %q", pageId)
+		return
+	}
+}
+
 func TestStoreUnexistentPageError(t *testing.T) {
 	store := setupPageStore()
 	defer cleanPageStore(store)
