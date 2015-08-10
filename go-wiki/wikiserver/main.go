@@ -17,8 +17,10 @@ func main() {
 	storageDir := flag.String("storage", DEFAULT_STORAGE_DIR, "storage directory for wiki pages")
 	flag.Parse()
 
+	pageStore := wiki.NewDiskStore(*storageDir)
 	wiki.SetAssetsDir(*assetsDir);
-	wiki.SetPageStore(wiki.NewDiskStore(*storageDir));
+	wiki.SetPageStore(pageStore);
+	wiki.SetSyntaxHandler(wiki.NewMarkdownSyntax(pageStore));
 	wiki.RegisterServices()
 
 	err := http.ListenAndServe(":8080", nil)

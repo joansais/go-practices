@@ -3,10 +3,11 @@
 		{{template "header"}}
 		<body>
 			<h1>{{.Title}}</h1>
-			<div>{{.Render}}</div>
-			<br><a href="/edit/{{.Title}}">Edit</a>
-			| <a href="/remove/{{.Title}}">Delete</a>
-			| <a href="/">Index</a>
+			<div>{{.BodyAsHtml}}</div>
+			<hr><a href="/">Index</a>
+			| <a href="/create/">Add</a>
+			| <a href="/edit/{{.Id}}">Edit</a>
+			| <a href="/delete/{{.Id}}">Delete</a>
 		</body>
 	</html>
 {{end}}

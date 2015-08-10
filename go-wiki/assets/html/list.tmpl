@@ -6,10 +6,12 @@
 			<div>
 				<ul>
 				{{range .}}
-					<li><a href="/view/{{.}}">{{.}}</a>
+					<li><a href="/view/{{.Id}}">{{.Title}}</a>
 				{{end}}
 				</ul>
 			</div>
+			<hr>
+			<a href="/create/">Add</a>
 		</body>
 	</html>
 {{end}}

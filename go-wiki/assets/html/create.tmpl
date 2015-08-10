@@ -1,13 +1,12 @@
-{{define "edit"}}
+{{define "create"}}
 	<html>
 		{{template "header"}}
 		<body>
-			<h1>Edit Page</h1>
+			<h1>Add Page</h1>
 			<form action="/save/" method="POST">
-			<input name="id" type="hidden" value="{{.Id}}" />
 			<div><textarea name="title" rows="1" cols="80">{{.Title}}</textarea></div>
 			<div><textarea name="body" rows="20" cols="80">{{.BodyToEdit}}</textarea></div>
-			<div><input type="submit" value="Save" /></div>
+			<div><input type="submit" value="Add"></div>
 			</form>
 			<a href="http://daringfireball.net/projects/markdown/basics" target="_blank">Markdown syntax help</a>
 		</body>
