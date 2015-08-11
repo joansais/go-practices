@@ -10,8 +10,7 @@ import (
 )
 
 var (
-	// FIXME: this regexp matches "[x] etc [y][z]", it should not!
-	pageLinkPattern = regexp.MustCompile(`\[(.+)\]\[(.*)\]`)
+	pageLinkPattern = regexp.MustCompile(`\[([^\]]+)\] ?\[([^\]]*)\]`)
 )
 
 type SyntaxHandler interface {
@@ -109,12 +108,7 @@ type pageLink struct {
 
 func parseLink(linkStr string) *pageLink {
 	submatches := pageLinkPattern.FindStringSubmatch(linkStr)
-/*
-fmt.Printf("linkStr: %s\n", linkStr)
-for k, submatch := range submatches {
-	fmt.Printf("submatches[%d]: %s\n", k, submatch)
-}
-*/
+
 	var txt, ref string
 	if submatches[2] != "" {
 		txt = submatches[1]

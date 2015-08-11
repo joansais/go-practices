@@ -12,9 +12,9 @@ func TestSyntaxRegularMarkdown(t *testing.T) {
 	defer cleanPageStore(store)
 	syntax := &markdownSyntax{store}
 
-	body := "Some text with *markdown*, an [inline link](http://example.net/)\n" +
-		"and a [reference link][1].\n" +
-		"[1]: http://example.net/\n"
+	body := "Some text with *markdown*, an [inline link](http://example1.net/), a [reference link][1], and another [REF LINK][].\n" +
+		"[1]: http://example2.net/\n" +
+		"[REF LINK]: http://example3.net/ \"Optional title\" \n"
 
 	obtained := syntax.BodyToEdit(body)
 	expected := body
@@ -31,8 +31,9 @@ func TestSyntaxRegularMarkdown(t *testing.T) {
 	}
 
 	obtained = string(syntax.BodyToHtml(body))
-	expected = "<p>Some text with <em>markdown</em>, an <a href=\"http://example.net/\" rel=\"nofollow\">inline link</a>\n" +
-		"and a <a href=\"http://example.net/\" rel=\"nofollow\">reference link</a>.</p>\n"
+	expected = "<p>Some text with <em>markdown</em>, an <a href=\"http://example1.net/\" rel=\"nofollow\">inline link</a>, " +
+		"a <a href=\"http://example2.net/\" rel=\"nofollow\">reference link</a>, " +
+		"and another <a href=\"http://example3.net/\" title=\"Optional title\" rel=\"nofollow\">REF LINK</a>.</p>\n"
 	if obtained != expected {
 		t.Errorf("markdownSyntax.BodyToHtml: expected %q, obtained %q", expected, obtained)
 		return
