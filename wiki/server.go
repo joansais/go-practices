@@ -20,38 +20,23 @@ const (
 
 var (
 	pageRequestPattern = regexp.MustCompile(`^/(view|edit|delete)/([a-zA-Z0-9]+)$`)
+)
+
+type Server struct {
 	pageStore PageStore
 	syntaxHandler SyntaxHandler
 	htmlTemplates *template.Template
-)
-
-func SetPageStore(store PageStore) {
-	pageStore = store
 }
 
-func SetSyntaxHandler(syntax SyntaxHandler) {
-	syntaxHandler = syntax
+func NewServer(store PageStore, syntax SyntaxHandler, assetsDir string) *Server {
+	return &Server{
+		pageStore: store,
+		syntaxHandler: syntax,
+		htmlTemplates: template.Must(template.ParseGlob(assetsDir + HTML_TEMPLATE_FILES))}
 }
 
-func SetAssetsDir(path string) {
-	htmlTemplates = template.Must(template.ParseGlob(path + HTML_TEMPLATE_FILES))
-}
-
-type PageModel struct {
-	Id			PageId
-	Title		string
-	BodyToEdit	string
-	BodyAsHtml	template.HTML
-}
-
-type PageListModel []*PageModel
-
-func (list PageListModel) Len() int           { return len(list) }
-func (list PageListModel) Less(i, j int) bool { return list[i].Title < list[j].Title }
-func (list PageListModel) Swap(i, j int)      { list[i], list[j] = list[j], list[i] }
-
-func handleList(res http.ResponseWriter, req *http.Request) {
-	ids, err := pageStore.ListAll()
+func (server *Server) handleList(res http.ResponseWriter, req *http.Request) {
+	ids, err := server.pageStore.ListAll()
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusInternalServerError)
 		return
@@ -59,7 +44,7 @@ func handleList(res http.ResponseWriter, req *http.Request) {
 
 	pageList := make(PageListModel, len(ids))
 	for k, id := range ids {
-		page, err := pageStore.Read(id)
+		page, err := server.pageStore.Read(id)
 		if err != nil {
 			http.Error(res, err.Error(), http.StatusInternalServerError)
 			return
@@ -68,37 +53,37 @@ func handleList(res http.ResponseWriter, req *http.Request) {
 	}
 	sort.Sort(pageList)
 
-	err = htmlTemplates.ExecuteTemplate(res, "list", pageList)
+	err = server.htmlTemplates.ExecuteTemplate(res, "list", pageList)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 
-func handleView(res http.ResponseWriter, req *http.Request) {
+func (server *Server) handleView(res http.ResponseWriter, req *http.Request) {
 	id, err := getRequestedPageId(req)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	page, err := pageStore.Read(id)
+	page, err := server.pageStore.Read(id)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	bodyAsHtml := syntaxHandler.BodyToHtml(page.Body)
+	bodyAsHtml := server.syntaxHandler.BodyToHtml(page.Body)
 	pageModel := &PageModel{Id: id, Title: page.Title, BodyAsHtml: bodyAsHtml}
 
-	err = htmlTemplates.ExecuteTemplate(res, "view", pageModel)
+	err = server.htmlTemplates.ExecuteTemplate(res, "view", pageModel)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 
-func handleCreate(res http.ResponseWriter, req *http.Request) {
+func (server *Server) handleCreate(res http.ResponseWriter, req *http.Request) {
 	title := req.URL.Query().Get("title")
 	if title == "" {
 		title = "New Page"
@@ -106,37 +91,37 @@ func handleCreate(res http.ResponseWriter, req *http.Request) {
 
 	pageModel := &PageModel{Title: title}
 
-	err := htmlTemplates.ExecuteTemplate(res, "create", pageModel)
+	err := server.htmlTemplates.ExecuteTemplate(res, "create", pageModel)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 
-func handleEdit(res http.ResponseWriter, req *http.Request) {
+func (server *Server) handleEdit(res http.ResponseWriter, req *http.Request) {
 	id, err := getRequestedPageId(req)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	page, err := pageStore.Read(id)
+	page, err := server.pageStore.Read(id)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	bodyToEdit := syntaxHandler.BodyToEdit(page.Body)
+	bodyToEdit := server.syntaxHandler.BodyToEdit(page.Body)
 	pageModel := &PageModel{Id: id, Title: page.Title, BodyToEdit: bodyToEdit}
 
-	err = htmlTemplates.ExecuteTemplate(res, "edit", pageModel)
+	err = server.htmlTemplates.ExecuteTemplate(res, "edit", pageModel)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 
-func handleSave(res http.ResponseWriter, req *http.Request) {
+func (server *Server) handleSave(res http.ResponseWriter, req *http.Request) {
 	err := req.ParseForm()
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusBadRequest)
@@ -146,13 +131,13 @@ func handleSave(res http.ResponseWriter, req *http.Request) {
 	id := PageId(req.Form.Get("id"))  // when creating a page, id == ""
 	title := req.Form.Get("title")
 	bodyFromEdit := req.Form.Get("body")
-	body := syntaxHandler.EditToBody(bodyFromEdit)
+	body := server.syntaxHandler.EditToBody(bodyFromEdit)
 	page := &Page{Id: id, Title: title, Body: body}
 
 	if id == "" {
-		id, err = pageStore.Create(page)
+		id, err = server.pageStore.Create(page)
 	} else {
-		err = pageStore.Update(page)
+		err = server.pageStore.Update(page)
 	}
 
 	if err != nil {
@@ -163,14 +148,14 @@ func handleSave(res http.ResponseWriter, req *http.Request) {
 	http.Redirect(res, req, VIEW_ENTRYPOINT_PATH+string(id), http.StatusFound)
 }
 
-func handleDelete(res http.ResponseWriter, req *http.Request) {
+func (server *Server) handleDelete(res http.ResponseWriter, req *http.Request) {
 	id, err := getRequestedPageId(req)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	err = pageStore.Delete(id)
+	err = server.pageStore.Delete(id)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusInternalServerError)
 		return
@@ -187,11 +172,12 @@ func getRequestedPageId(req *http.Request) (PageId, error) {
 	return PageId(submatches[2]), nil
 }
 
-func RegisterServices() {
-	http.HandleFunc(LIST_ENTRYPOINT_PATH, handleList)
-	http.HandleFunc(VIEW_ENTRYPOINT_PATH, handleView)
-	http.HandleFunc(CREATE_ENTRYPOINT_PATH, handleCreate)
-	http.HandleFunc(EDIT_ENTRYPOINT_PATH, handleEdit)
-	http.HandleFunc(SAVE_ENTRYPOINT_PATH, handleSave)
-	http.HandleFunc(DELETE_ENTRYPOINT_PATH, handleDelete)
+func (server *Server) Start(addr string) error {
+	http.HandleFunc(LIST_ENTRYPOINT_PATH, server.handleList)
+	http.HandleFunc(VIEW_ENTRYPOINT_PATH, server.handleView)
+	http.HandleFunc(CREATE_ENTRYPOINT_PATH, server.handleCreate)
+	http.HandleFunc(EDIT_ENTRYPOINT_PATH, server.handleEdit)
+	http.HandleFunc(SAVE_ENTRYPOINT_PATH, server.handleSave)
+	http.HandleFunc(DELETE_ENTRYPOINT_PATH, server.handleDelete)
+	return http.ListenAndServe(addr, nil)
 }

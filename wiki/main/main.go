@@ -1,8 +1,7 @@
 package main
 
 import (
-	"github.com/joansais/go-tutorials/go-wiki/wiki"
-	"net/http"
+	"github.com/joansais/go-tutorials/wiki"
 	"log"
 	"flag"
 )
@@ -17,13 +16,10 @@ func main() {
 	storageDir := flag.String("storage", DEFAULT_STORAGE_DIR, "storage directory for wiki pages")
 	flag.Parse()
 
-	pageStore := wiki.NewDiskStore(*storageDir)
-	wiki.SetAssetsDir(*assetsDir);
-	wiki.SetPageStore(pageStore);
-	wiki.SetSyntaxHandler(wiki.NewMarkdownSyntax(pageStore));
-	wiki.RegisterServices()
-
-	err := http.ListenAndServe(":8080", nil)
+	store := wiki.NewDiskStore(*storageDir)
+	syntax := wiki.NewMarkdownSyntax(store)
+	server := wiki.NewServer(store, syntax, *assetsDir)
+	err := server.Start(":8080")
 	if err != nil {
 		log.Fatal("Error starting server: ", err)
 		return
