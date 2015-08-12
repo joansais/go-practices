@@ -12,7 +12,7 @@ func TestSyntaxRegularMarkdown(t *testing.T) {
 	defer cleanPageStore(store)
 	syntax := &markdownSyntax{store}
 
-	body := "Some text with *markdown*, an [inline link](http://example1.net/), a [reference link][1], and another [REF LINK][].\n" +
+	body := "Some text with *markdown*, an [inline link](http://example1.net/), a [reference link] [1], and another [REF LINK][].\n" +
 		"[1]: http://example2.net/\n" +
 		"[REF LINK]: http://example3.net/ \"Optional title\" \n"
 
@@ -59,7 +59,7 @@ func TestSyntaxPageLinkEditing(t *testing.T) {
 		return
 	}
 
-	page3 := &Page{Title: "Page #3", Body: fmt.Sprintf("Some text referencing [the second page][%s].", page2.Id)}
+	page3 := &Page{Title: "Page #3", Body: fmt.Sprintf("Some text referencing [the second page][%s] and [%s] [].", page2.Id, page1.Id)}
 	_, err = store.Create(page3)
 	if err != nil {
 		t.Error(err)
@@ -88,14 +88,14 @@ func TestSyntaxPageLinkEditing(t *testing.T) {
 	}
 
 	obtained = syntax.BodyToEdit(page3.Body)
-	expected = fmt.Sprintf("Some text referencing [the second page][%s].", page2.Title)
+	expected = fmt.Sprintf("Some text referencing [the second page][%s] and [%s] [].", page2.Title, page1.Title)
 	if obtained != expected {
 		t.Errorf("markdownSyntax.BodyToEdit: expected %q, obtained %q", expected, obtained)
 		return
 	}
 
 	obtained = syntax.EditToBody(obtained)
-	expected = fmt.Sprintf("Some text referencing [the second page][%s].", page2.Id)
+	expected = fmt.Sprintf("Some text referencing [the second page][%s] and [%s] [].", page2.Id, page1.Id)
 	if obtained != expected {
 		t.Errorf("markdownSyntax.EditToBody: expected %q, obtained %q", expected, obtained)
 		return
@@ -121,7 +121,7 @@ func TestSyntaxPageLinkRendering(t *testing.T) {
 		return
 	}
 
-	page3 := &Page{Title: "Page #3", Body: fmt.Sprintf("Some text referencing [the second page][%s].", page2.Id)}
+	page3 := &Page{Title: "Page #3", Body: fmt.Sprintf("Some text referencing [the second page][%s] and [%s] [].", page2.Id, page1.Id)}
 	_, err = store.Create(page3)
 	if err != nil {
 		t.Error(err)
@@ -143,7 +143,8 @@ func TestSyntaxPageLinkRendering(t *testing.T) {
 	}
 
 	obtained = string(syntax.BodyToHtml(page3.Body))
-	expected = fmt.Sprintf("<p>Some text referencing <a href=\"/view/%s\" title=\"%s\" rel=\"nofollow\">the second page</a>.</p>\n", page2.Id, page2.Title)
+	expected = fmt.Sprintf("<p>Some text referencing <a href=\"/view/%s\" title=\"%s\" rel=\"nofollow\">the second page</a> " +
+		"and <a href=\"/view/%s\" title=\"%s\" rel=\"nofollow\">%s</a>.</p>\n", page2.Id, page2.Title, page1.Id, page1.Title, page1.Title)
 	if obtained != expected {
 		t.Errorf("markdownSyntax.BodyToHtml: expected %q, obtained %q", expected, obtained)
 		return
@@ -169,7 +170,7 @@ func TestSyntaxPageLinkSpecialChars(t *testing.T) {
 		return
 	}
 
-	page3 := &Page{Title: "Page #3", Body: fmt.Sprintf("Some text referencing [the second page][%s].", page2.Id)}
+	page3 := &Page{Title: "Page #3", Body: fmt.Sprintf("Some text referencing [the second page][%s] and [%s] [].", page2.Id, page1.Id)}
 	_, err = store.Create(page3)
 	if err != nil {
 		t.Error(err)
@@ -191,7 +192,8 @@ func TestSyntaxPageLinkSpecialChars(t *testing.T) {
 	}
 
 	obtained = string(syntax.BodyToHtml(page3.Body))
-	expected = fmt.Sprintf("<p>Some text referencing <a href=\"/view/%s\" title=\"%s\" rel=\"nofollow\">the second page</a>.</p>\n", page2.Id, escapeXml(page2.Title))
+	expected = fmt.Sprintf("<p>Some text referencing <a href=\"/view/%s\" title=\"%s\" rel=\"nofollow\">the second page</a> " +
+		 "and <a href=\"/view/%s\" title=\"%s\" rel=\"nofollow\">%s</a>.</p>\n", page2.Id, escapeXml(page2.Title), page1.Id, escapeXml(page1.Title), escapeXml(page1.Title))
 	if obtained != expected {
 		t.Errorf("markdownSyntax.BodyToHtml: expected %q, obtained %q", expected, obtained)
 		return

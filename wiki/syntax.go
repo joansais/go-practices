@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	pageLinkPattern = regexp.MustCompile(`\[([^\]]+)\] ?\[([^\]]*)\]`)
+	pageLinkPattern = regexp.MustCompile(`\[([^\[]+)\]( ?)\[([^\[]*)\]`)
 )
 
 type SyntaxHandler interface {
@@ -49,7 +49,7 @@ func (syntax *markdownSyntax) EditToBody(edit string) string {
 func (syntax *markdownSyntax) titleToPageId(linkStr string) string {
 	link := parseLink(linkStr)
 
-	pageId, err := syntax.pageStore.FindByTitle(link.ref)
+	pageId, err := syntax.pageStore.FindByTitle(strings.TrimSpace(link.ref))
 	if err == nil && pageId != "" {  // link references an existent page
 		link.ref = string(pageId)
 	}
@@ -101,30 +101,35 @@ func (syntax *markdownSyntax) pageIdToLink(reference string) (ref *blackfriday.R
 	return
 }
 
+// A reference link with syntax [txt][ref] or [ref][], with an optional separating space (spc)
 type pageLink struct {
 	txt string
 	ref string
+	spc string
 }
 
 func parseLink(linkStr string) *pageLink {
 	submatches := pageLinkPattern.FindStringSubmatch(linkStr)
+	if len(submatches) != 4 {  // should not occur
+		panic("syntax.parseLink: inconsistent regexp match")
+	}
+	
+	txt := submatches[1]
+	spc := submatches[2]
+	ref := submatches[3]
 
-	var txt, ref string
-	if submatches[2] != "" {
-		txt = submatches[1]
-		ref = submatches[2]
-	} else {
+	if ref == "" {
+		ref = txt
 		txt = ""
-		ref = submatches[1]
 	}
 
-	return &pageLink{txt: strings.TrimSpace(txt), ref: strings.TrimSpace(ref)}
+	return &pageLink{txt, ref, spc}
 }
 
 func (link pageLink) String() string {
 	if link.txt != "" {
-		return fmt.Sprintf("[%s][%s]", link.txt, link.ref)
+		return fmt.Sprintf("[%s]%s[%s]", link.txt, link.spc, link.ref)
 	} else {
-		return fmt.Sprintf("[%s][]", link.ref)
+		return fmt.Sprintf("[%s]%s[]", link.ref, link.spc)
 	}
 }
