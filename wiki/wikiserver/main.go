@@ -7,11 +7,13 @@ import (
 )
 
 const (
+	DEFAULT_ADDR = ":8080"
 	DEFAULT_ASSETS_DIR = "assets"
 	DEFAULT_STORAGE_DIR = "data/pages"
 )
 
 func main() {
+	addr := flag.String("addr", DEFAULT_ADDR, "network address to listen on")
 	assetsDir := flag.String("assets", DEFAULT_ASSETS_DIR, "location of HTML templates")
 	storageDir := flag.String("storage", DEFAULT_STORAGE_DIR, "storage directory for wiki pages")
 	flag.Parse()
@@ -19,7 +21,7 @@ func main() {
 	store := wiki.NewDiskStore(*storageDir)
 	syntax := wiki.NewMarkdownSyntax(store)
 	server := wiki.NewServer(store, syntax, *assetsDir)
-	err := server.Start(":8080")
+	err := server.Start(*addr)
 	if err != nil {
 		log.Fatal("Error starting server: ", err)
 		return

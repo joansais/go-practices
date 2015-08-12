@@ -5,11 +5,12 @@
 			<h1>Edit Page</h1>
 			<form action="/save/" method="POST">
 			<input name="id" type="hidden" value="{{.Id}}" />
-			<div><textarea name="title" rows="1" cols="80">{{.Title}}</textarea></div>
+			<div><textarea name="title" rows="1" cols="80">{{.Title}}</textarea></div><p>
 			<div><textarea name="body" rows="20" cols="80">{{.BodyToEdit}}</textarea></div>
 			<div><input type="submit" value="Save" /></div>
 			</form>
-			<a href="http://daringfireball.net/projects/markdown/basics" target="_blank">Markdown syntax help</a>
+			<p><a href="http://daringfireball.net/projects/markdown/basics" target="_blank">Markdown syntax help</a></p>
+			<p>To insert a reference to another page, use the syntax [title][] or [text][title].</p>
 		</body>
 	</html>
 {{end}}

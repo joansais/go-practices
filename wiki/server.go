@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"errors"
 	"sort"
+	"log"
 )
 
 const (
@@ -35,10 +36,20 @@ func NewServer(store PageStore, syntax SyntaxHandler, assetsDir string) *Server 
 		htmlTemplates: template.Must(template.ParseGlob(assetsDir + HTML_TEMPLATE_FILES))}
 }
 
+func (server *Server) Start(addr string) error {
+	http.HandleFunc(LIST_ENTRYPOINT_PATH, server.handleList)
+	http.HandleFunc(VIEW_ENTRYPOINT_PATH, server.handleView)
+	http.HandleFunc(CREATE_ENTRYPOINT_PATH, server.handleCreate)
+	http.HandleFunc(EDIT_ENTRYPOINT_PATH, server.handleEdit)
+	http.HandleFunc(SAVE_ENTRYPOINT_PATH, server.handleSave)
+	http.HandleFunc(DELETE_ENTRYPOINT_PATH, server.handleDelete)
+	return http.ListenAndServe(addr, nil)
+}
+
 func (server *Server) handleList(res http.ResponseWriter, req *http.Request) {
 	ids, err := server.pageStore.ListAll()
 	if err != nil {
-		http.Error(res, err.Error(), http.StatusInternalServerError)
+		internalError(res, err)
 		return
 	}
 
@@ -46,7 +57,7 @@ func (server *Server) handleList(res http.ResponseWriter, req *http.Request) {
 	for k, id := range ids {
 		page, err := server.pageStore.Read(id)
 		if err != nil {
-			http.Error(res, err.Error(), http.StatusInternalServerError)
+			internalError(res, err)
 			return
 		}
 		pageList[k] = &PageModel{Id: id, Title: page.Title}
@@ -55,7 +66,7 @@ func (server *Server) handleList(res http.ResponseWriter, req *http.Request) {
 
 	err = server.htmlTemplates.ExecuteTemplate(res, "list", pageList)
 	if err != nil {
-		http.Error(res, err.Error(), http.StatusInternalServerError)
+		internalError(res, err)
 		return
 	}
 }
@@ -78,7 +89,7 @@ func (server *Server) handleView(res http.ResponseWriter, req *http.Request) {
 
 	err = server.htmlTemplates.ExecuteTemplate(res, "view", pageModel)
 	if err != nil {
-		http.Error(res, err.Error(), http.StatusInternalServerError)
+		internalError(res, err)
 		return
 	}
 }
@@ -93,7 +104,7 @@ func (server *Server) handleCreate(res http.ResponseWriter, req *http.Request) {
 
 	err := server.htmlTemplates.ExecuteTemplate(res, "create", pageModel)
 	if err != nil {
-		http.Error(res, err.Error(), http.StatusInternalServerError)
+		internalError(res, err)
 		return
 	}
 }
@@ -116,7 +127,7 @@ func (server *Server) handleEdit(res http.ResponseWriter, req *http.Request) {
 
 	err = server.htmlTemplates.ExecuteTemplate(res, "edit", pageModel)
 	if err != nil {
-		http.Error(res, err.Error(), http.StatusInternalServerError)
+		internalError(res, err)
 		return
 	}
 }
@@ -141,7 +152,7 @@ func (server *Server) handleSave(res http.ResponseWriter, req *http.Request) {
 	}
 
 	if err != nil {
-		http.Error(res, err.Error(), http.StatusInternalServerError)
+		internalError(res, err)
 		return
 	}
 
@@ -157,7 +168,7 @@ func (server *Server) handleDelete(res http.ResponseWriter, req *http.Request) {
 
 	err = server.pageStore.Delete(id)
 	if err != nil {
-		http.Error(res, err.Error(), http.StatusInternalServerError)
+		internalError(res, err)
 		return
 	}
 
@@ -172,12 +183,7 @@ func getRequestedPageId(req *http.Request) (PageId, error) {
 	return PageId(submatches[2]), nil
 }
 
-func (server *Server) Start(addr string) error {
-	http.HandleFunc(LIST_ENTRYPOINT_PATH, server.handleList)
-	http.HandleFunc(VIEW_ENTRYPOINT_PATH, server.handleView)
-	http.HandleFunc(CREATE_ENTRYPOINT_PATH, server.handleCreate)
-	http.HandleFunc(EDIT_ENTRYPOINT_PATH, server.handleEdit)
-	http.HandleFunc(SAVE_ENTRYPOINT_PATH, server.handleSave)
-	http.HandleFunc(DELETE_ENTRYPOINT_PATH, server.handleDelete)
-	return http.ListenAndServe(addr, nil)
+func internalError(res http.ResponseWriter, err error) {
+	http.Error(res, "internal error", http.StatusInternalServerError)  // do not return internal error details to client
+	log.Println(err)
 }
