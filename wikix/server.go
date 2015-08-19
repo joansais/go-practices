@@ -143,7 +143,7 @@ func (err InvalidRequestError) Error() string {
 	}
 }
 
-func errorHandler(res http.ResponseWriter) Catcher {
+func errorHandler(res http.ResponseWriter) ErrorHandler {
 	return func(err error) {
 		switch err.(type) {
 		case InvalidRequestError:

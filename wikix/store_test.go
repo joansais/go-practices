@@ -4,7 +4,7 @@ import (
 	"testing"
 	"sort"
 	. "gopkg.in/check.v1"
-	. "github.com/joansais/exception"
+	. "github.com/joansais/go-practices/exception"
 )
 
 func Test(t *testing.T) { TestingT(t) }
