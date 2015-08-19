@@ -1,22 +1,23 @@
-package wiki
+package wikix
 
 import (
-	"net/http"
-	"html/template"
-	"regexp"
 	"errors"
-	"sort"
+	"html/template"
 	"log"
+	"net/http"
+	"regexp"
+	"sort"
+	. "github.com/joansais/go-practices/exception"
 )
 
 const (
-	LIST_ENTRYPOINT_PATH = "/"
-	VIEW_ENTRYPOINT_PATH = "/view/"
+	LIST_ENTRYPOINT_PATH   = "/"
+	VIEW_ENTRYPOINT_PATH   = "/view/"
 	CREATE_ENTRYPOINT_PATH = "/create/"
-	EDIT_ENTRYPOINT_PATH = "/edit/"
-	SAVE_ENTRYPOINT_PATH = "/save/"
+	EDIT_ENTRYPOINT_PATH   = "/edit/"
+	SAVE_ENTRYPOINT_PATH   = "/save/"
 	DELETE_ENTRYPOINT_PATH = "/delete/"
-	HTML_TEMPLATE_FILES  = "/html/*.tmpl"
+	HTML_TEMPLATE_FILES    = "/html/*.tmpl"
 )
 
 var (
@@ -24,14 +25,14 @@ var (
 )
 
 type Server struct {
-	pageStore PageStore
+	pageStore     PageStore
 	syntaxHandler SyntaxHandler
 	htmlTemplates *template.Template
 }
 
 func NewServer(store PageStore, syntax SyntaxHandler, assetsDir string) *Server {
 	return &Server{
-		pageStore: store,
+		pageStore:     store,
 		syntaxHandler: syntax,
 		htmlTemplates: template.Must(template.ParseGlob(assetsDir + HTML_TEMPLATE_FILES))}
 }
@@ -47,140 +48,87 @@ func (server *Server) Start(addr string) error {
 }
 
 func (server *Server) handleList(res http.ResponseWriter, req *http.Request) {
-	ids, err := server.pageStore.ListAll()
-	if err != nil {
-		handleError(res, err)
-		return
-	}
+	defer Catch(errorHandler(res))
+
+	ids := server.pageStore.ListAll()
 
 	pageList := make(PageListModel, len(ids))
 	for k, id := range ids {
-		page, err := server.pageStore.Read(id)
-		if err != nil {
-			handleError(res, err)
-			return
-		}
+		page := server.pageStore.Read(id)
 		pageList[k] = &PageModel{Id: id, Title: page.Title}
 	}
 	sort.Sort(pageList)
 
-	err = server.htmlTemplates.ExecuteTemplate(res, "list", pageList)
-	if err != nil {
-		handleError(res, err)
-		return
-	}
+	ThrowIf(server.htmlTemplates.ExecuteTemplate(res, "list", pageList))
 }
 
 func (server *Server) handleView(res http.ResponseWriter, req *http.Request) {
-	id, err := getRequestedPageId(req)
-	if err != nil {
-		handleError(res, err)
-		return
-	}
+	defer Catch(errorHandler(res))
 
-	page, err := server.pageStore.Read(id)
-	if err != nil {
-		handleError(res, err)
-		return
-	}
-
+	page := server.pageStore.Read(getRequestedPageId(req))
 	bodyAsHtml := server.syntaxHandler.BodyToHtml(page.Body)
-	pageModel := &PageModel{Id: id, Title: page.Title, BodyAsHtml: bodyAsHtml}
 
-	err = server.htmlTemplates.ExecuteTemplate(res, "view", pageModel)
-	if err != nil {
-		handleError(res, err)
-		return
-	}
+	pageModel := &PageModel{Id: page.Id, Title: page.Title, BodyAsHtml: bodyAsHtml}
+	ThrowIf(server.htmlTemplates.ExecuteTemplate(res, "view", pageModel))
 }
 
 func (server *Server) handleCreate(res http.ResponseWriter, req *http.Request) {
+	defer Catch(errorHandler(res))
+
 	title := req.URL.Query().Get("title")
 	if title == "" {
 		title = "New Page"
 	}
 
 	pageModel := &PageModel{Title: title}
-
-	err := server.htmlTemplates.ExecuteTemplate(res, "create", pageModel)
-	if err != nil {
-		handleError(res, err)
-		return
-	}
+	ThrowIf(server.htmlTemplates.ExecuteTemplate(res, "create", pageModel))
 }
 
 func (server *Server) handleEdit(res http.ResponseWriter, req *http.Request) {
-	id, err := getRequestedPageId(req)
-	if err != nil {
-		handleError(res, err)
-		return
-	}
+	defer Catch(errorHandler(res))
 
-	page, err := server.pageStore.Read(id)
-	if err != nil {
-		handleError(res, err)
-		return
-	}
-
+	page := server.pageStore.Read(getRequestedPageId(req))
 	bodyToEdit := server.syntaxHandler.BodyToEdit(page.Body)
-	pageModel := &PageModel{Id: id, Title: page.Title, BodyToEdit: bodyToEdit}
 
-	err = server.htmlTemplates.ExecuteTemplate(res, "edit", pageModel)
-	if err != nil {
-		handleError(res, err)
-		return
-	}
+	pageModel := &PageModel{Id: page.Id, Title: page.Title, BodyToEdit: bodyToEdit}
+	ThrowIf(server.htmlTemplates.ExecuteTemplate(res, "edit", pageModel))
 }
 
 func (server *Server) handleSave(res http.ResponseWriter, req *http.Request) {
+	defer Catch(errorHandler(res))
+
 	err := req.ParseForm()
 	if err != nil {
-		handleError(res, InvalidRequestError{err})
-		return
+		Throw(InvalidRequestError{err})
 	}
 
-	id := PageId(req.Form.Get("id"))  // when creating a page, id == ""
+	id := PageId(req.Form.Get("id")) // when creating a page, id == ""
 	title := req.Form.Get("title")
 	bodyFromEdit := req.Form.Get("body")
 	body := server.syntaxHandler.EditToBody(bodyFromEdit)
 	page := &Page{Id: id, Title: title, Body: body}
 
 	if id == "" {
-		id, err = server.pageStore.Create(page)
+		id = server.pageStore.Create(page)
 	} else {
-		err = server.pageStore.Update(page)
-	}
-
-	if err != nil {
-		handleError(res, err)
-		return
+		server.pageStore.Update(page)
 	}
 
 	http.Redirect(res, req, VIEW_ENTRYPOINT_PATH+string(id), http.StatusFound)
 }
 
 func (server *Server) handleDelete(res http.ResponseWriter, req *http.Request) {
-	id, err := getRequestedPageId(req)
-	if err != nil {
-		handleError(res, err)
-		return
-	}
-
-	err = server.pageStore.Delete(id)
-	if err != nil {
-		handleError(res, err)
-		return
-	}
-
+	defer Catch(errorHandler(res))
+	server.pageStore.Delete(getRequestedPageId(req))
 	http.Redirect(res, req, LIST_ENTRYPOINT_PATH, http.StatusFound)
 }
 
-func getRequestedPageId(req *http.Request) (PageId, error) {
+func getRequestedPageId(req *http.Request) PageId {
 	submatches := pageRequestPattern.FindStringSubmatch(req.URL.Path)
 	if submatches == nil {
-		return "", InvalidRequestError{errors.New("invalid page id")}
+		Throw(InvalidRequestError{errors.New("invalid page id")})
 	}
-	return PageId(submatches[2]), nil
+	return PageId(submatches[2])
 }
 
 type InvalidRequestError struct {
@@ -195,14 +143,16 @@ func (err InvalidRequestError) Error() string {
 	}
 }
 
-func handleError(res http.ResponseWriter, err error) {
-	switch err.(type) {
-	case InvalidRequestError:
-		http.Error(res, err.Error(), http.StatusBadRequest)
-	case UnexistentPageError:
-		http.Error(res, err.Error(), http.StatusNotFound)
-	default:
-		http.Error(res, "internal error", http.StatusInternalServerError) // do not return internal error details to client
-		log.Println(err)
+func errorHandler(res http.ResponseWriter) Catcher {
+	return func(err error) {
+		switch err.(type) {
+		case InvalidRequestError:
+			http.Error(res, err.Error(), http.StatusBadRequest)
+		case UnexistentPageError:
+			http.Error(res, err.Error(), http.StatusNotFound)
+		default:
+			http.Error(res, "internal error", http.StatusInternalServerError) // do not return internal error details to client
+			log.Println(err)
+		}
 	}
 }

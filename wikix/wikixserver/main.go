@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/joansais/go-practices/wiki"
+	"github.com/joansais/go-practices/wikix"
 	"log"
 	"flag"
 )
@@ -18,9 +18,9 @@ func main() {
 	storageDir := flag.String("storage", DEFAULT_STORAGE_DIR, "storage directory for wiki pages")
 	flag.Parse()
 
-	store := wiki.NewDiskStore(*storageDir)
-	syntax := wiki.NewMarkdownSyntax(store)
-	server := wiki.NewServer(store, syntax, *assetsDir)
+	store := wikix.NewDiskStore(*storageDir)
+	syntax := wikix.NewMarkdownSyntax(store)
+	server := wikix.NewServer(store, syntax, *assetsDir)
 	err := server.Start(*addr)
 	if err != nil {
 		log.Fatal("Error starting server: ", err)

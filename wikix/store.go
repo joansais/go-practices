@@ -1,4 +1,4 @@
-package wiki
+package wikix
 
 import (
 	"os"
@@ -9,15 +9,16 @@ import (
 	"strings"
 	"errors"
 	"fmt"
+	. "github.com/joansais/go-practices/exception"
 )
 
 type PageStore interface {
-	Create(*Page) (PageId, error)
-	Read(PageId) (*Page, error)
-	Update(*Page) error
-	Delete(PageId) error
-	ListAll() ([]PageId, error)
-	FindByTitle(string) (PageId, error)
+	Create(*Page) PageId
+	Read(PageId) *Page
+	Update(*Page)
+	Delete(PageId)
+	ListAll() []PageId
+	FindByTitle(string) PageId
 }
 
 const (
@@ -33,44 +34,30 @@ func NewDiskStore(path string) PageStore {
 	return &diskStore{path: path}
 }
 
-func (store *diskStore) Create(page *Page) (PageId, error) {
-	id, err := newPageId()
-	if err != nil {
-		return "", err
-	}
-	
+func (store *diskStore) Create(page *Page) PageId {
+	id := newPageId()
 	page.Id = id
-	err = store.writePageToFile(page)
-	if err != nil {
-		return "", err
-	}
-
-	return id, nil
+	store.writePageToFile(page)
+	return id
 }
 
-func (store *diskStore) Read(id PageId) (*Page, error) {
+func (store *diskStore) Read(id PageId) *Page {
 	return store.readPageFromFile(id)
 }
 
-func (store *diskStore) Update(page *Page) error {
-	_, err := store.readPageFromFile(page.Id)  // check that page exists
-	if err != nil {
-		return err
-	}
-	
-	return store.writePageToFile(page)
+func (store *diskStore) Update(page *Page) {
+	_ = store.readPageFromFile(page.Id)  // check that page exists
+	store.writePageToFile(page)
 }
 
-func (store *diskStore) Delete(id PageId) error {
+func (store *diskStore) Delete(id PageId) {
 	filename := store.getPageFilename(id)
-	return os.Remove(filename)
+	ThrowIf(os.Remove(filename))
 }
 
-func (store *diskStore) ListAll() (result []PageId, err error) {
+func (store *diskStore) ListAll() (result []PageId) {
 	files, err := ioutil.ReadDir(store.path)
-	if err != nil {
-		return
-	}
+	ThrowIf(err)
 
 	for _, file := range files {
 		if file.Mode().IsRegular() && strings.HasSuffix(file.Name(), FILE_SUFFIX) {
@@ -82,70 +69,57 @@ func (store *diskStore) ListAll() (result []PageId, err error) {
 }
 
 // TODO: implement more efficiently
-func (store *diskStore) FindByTitle(title string) (PageId, error) {
-	ids, err := store.ListAll()
-	if err != nil {
-		return "", err
-	}
-
-	for _, id := range ids {
-		page, err := store.Read(id)
-		if err != nil {
-			return "", err
-		}
+func (store *diskStore) FindByTitle(title string) PageId {
+	for _, id := range store.ListAll() {
+		page := store.Read(id)
 		if title == page.Title {
-			return page.Id, nil
+			return page.Id
 		}
 	}
-
-	return "", nil
+	return ""
 }
 
-func (store *diskStore) readPageFromFile(id PageId) (*Page, error) {
+func (store *diskStore) readPageFromFile(id PageId) *Page {
 	filename := store.getPageFilename(id)
 	content, err := ioutil.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, UnexistentPageError{id}
+			Throw(UnexistentPageError{id})
 		} else {
-			return nil, err
+			Throw(err)
 		}
 	}
 
 	var page Page
 	err = json.Unmarshal(content, &page)
 	if err != nil {
-		return nil, CorruptedFileError{filename, err}
+		Throw(CorruptedFileError{filename, err})
 	}
 	
 	if id != page.Id {
-		return nil, CorruptedFileError{filename, errors.New("inconsistent page id")}
+		Throw(CorruptedFileError{filename, errors.New("inconsistent page id")})
 	}
 	
-	return &page, nil
+	return &page
 }
 
-func (store *diskStore) writePageToFile(page *Page) error {
+func (store *diskStore) writePageToFile(page *Page) {
 	content, err := json.Marshal(page)
-	if err != nil {
-		return err
-	}
-
+	ThrowIf(err)
 	filename := store.getPageFilename(page.Id)
-	return ioutil.WriteFile(filename, content, 0600)
+	err = ioutil.WriteFile(filename, content, 0600)
+	ThrowIf(err)
 }
 
 func (store *diskStore) getPageFilename(id PageId) string {
 	return store.path + "/" + string(id) + FILE_SUFFIX
 }
 
-func newPageId() (PageId, error) {
+func newPageId() PageId {
 	bytes := make([]byte, PAGE_ID_LEN)
 	_, err := rand.Read(bytes)
-	if err != nil {
-		return "", err
-	}
-	return PageId(hex.EncodeToString(bytes)), nil
+	ThrowIf(err)
+	return PageId(hex.EncodeToString(bytes))
 }
 
 type UnexistentPageError struct {
